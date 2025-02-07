@@ -1,5 +1,7 @@
 # Go Agents
 
+<img src="img/golang-cyberpunk.jpeg">
+
 This purely experimental project aims to serve AI agents in Golang.
 
 ### First speed test
