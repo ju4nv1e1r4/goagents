@@ -1,17 +1,34 @@
 package main
 
 import (
-	"goagents/app"
-	"log"
-	"os"
+	"goagents/careerApp"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
+type Input struct {
+	Role string `json:"role"`
+	CV string `json:"cv"`
+}
 
+
+func analysis(c *gin.Context) {
+	var content Input
+
+	if err := c.ShouldBindJSON(&content); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	report := careerApp.Report(content.Role, content.CV)
+
+	c.JSON(http.StatusOK, gin.H{"report": report})
+}
 
 func main()  {
-	application := app.RunAgents()
-	err := application.Run(os.Args)
-	if err != nil {
-		log.Fatal(err)
-	}
+	r := gin.Default()
+	
+	r.POST("/analysis", analysis)
+	r.Run()
 }
