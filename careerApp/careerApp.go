@@ -1,41 +1,43 @@
 package careerApp
 
 import (
-	"github.com/urfave/cli"
+	"sync"
 )
 
 
-func Match() *cli.App {
-	careerApp := cli.NewApp()
-	careerApp.Name = "LLM Agents"
-	careerApp.Usage = "Run LLM models"
+func MatchRoleCV(role string, cv string) (string, string) {
+	var wg sync.WaitGroup
+	var roleResponse, cvResponse string
+	var roleErr, cvErr error
 
-	flags := []cli.Flag{
-			cli.StringFlag{
-					Name: "role",
-					Value: "Você é um assistente de Career Coach e Carreiras. Seu trabalho é analisar vagas. Você receberá um currículo e irá analisar o match entre ele e uma vaga.",
+	wg.Add(2)
 
-			},
-			cli.StringFlag{
-					Name: "prompt",
-					Value: "Qual o match entre a vaga e o currículo",
-			},
+	go func() {
+		defer wg.Done()
+		roleResponse, roleErr = RolesAssistant(role)
+	}()
+
+	go func() {
+		defer wg.Done()
+		cvResponse, cvErr = CVAssistant(cv)
+	}()
+
+	wg.Wait()
+	
+	if roleErr != nil || cvErr != nil {
+		return "Erro na análise da vaga", "Erro na análise do currículo"
 	}
 
-	careerApp.Commands = []cli.Command{
-	{
-		Name: "openai",
-		Usage: "Run Career Assistant",
-		Flags: flags,
-		Action: HRAssistant,
-	},
-	{
-		Name: "langchain",
-		Usage: "Run Career Coach",
-		Flags: flags,
-		Action: CareerCoach,
-	},
+	return roleResponse, cvResponse
 }
 
-	return careerApp
+func Report(role string, cv string) string {
+    roleAnalysis, cvAnalysis := MatchRoleCV(role, cv)
+
+    finalReport, err := CareerCoach(roleAnalysis, cvAnalysis)
+    if err != nil {
+        return `{"outputLLM": "Erro ao gerar relatório"}`
+    }
+
+    return finalReport
 }

@@ -3,100 +3,66 @@ package careerApp
 import (
 	"context"
 	"fmt"
-	"log"
 
+	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/option"
 	"github.com/spf13/viper"
-	"github.com/tmc/langchaingo/llms"
-	"github.com/tmc/langchaingo/llms/openai"
-	"github.com/urfave/cli"
 )
 
-func HRAssistant(c *cli.Context)  {
+func loadAPIkey() (string, error) {
 	viper.SetConfigFile(".env")
 	err := viper.ReadInConfig()
 	if err != nil {
-		return
+		return "", fmt.Errorf("erro ao ler o arquivo de configuração: %v", err)
 	}
-	apiKey := viper.GetString("OPENAI_API_KEY")
-
-	llm, err := openai.New(
-		openai.WithModel("gpt-4o-mini"),
-		openai.WithToken(apiKey),
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
-	ctx := context.Background()
-
-	role := c.String("role")
-	question := c.String("prompt")
-
-	content := []llms.MessageContent{
-		llms.TextParts(llms.ChatMessageTypeSystem, role),
-		llms.TextParts(llms.ChatMessageTypeHuman, question),	
-	}
-
-	completion, err := llm.GenerateContent(
-		ctx,
-		content,
-		llms.WithStreamingFunc(func(ctx context.Context, chunk []byte) error {
-			fmt.Print(string(chunk))
-			return nil
-		}),
-		llms.WithSeed(1),
-		llms.WithFrequencyPenalty(0.6),
-		llms.WithTemperature(0.4),
-	)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_ = completion
-
+	return viper.GetString("OPENAI_API_KEY"), nil
 }
 
-func CareerCoach(c *cli.Context)  {
-	viper.SetConfigFile(".env")
-	err := viper.ReadInConfig()
+func CallLLM(prompt string, role string) (string, error) {
+	apiKey, err := loadAPIkey()
 	if err != nil {
-		return
+		return "", err
 	}
-	apiKey := viper.GetString("OPENAI_API_KEY")
-
-	llm, err := openai.New(
-		openai.WithModel("gpt-4o-mini"),
-		openai.WithToken(apiKey),
+	client := openai.NewClient(
+		option.WithAPIKey(apiKey),
 	)
-	if err != nil {
-		log.Fatal(err)
-	}
+
 	ctx := context.Background()
 
-	role := c.String("role")
-	question := c.String("prompt")
+	
 
-	content := []llms.MessageContent{
-		llms.TextParts(llms.ChatMessageTypeSystem, role),
-		llms.TextParts(llms.ChatMessageTypeHuman, question),	
+	completion, err := client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage(role),
+			openai.UserMessage(prompt),
+		}),
+		Seed:  openai.Int(1),
+		Model: openai.F(openai.ChatModelGPT4o),
+	})
+	if err != nil {
+		panic(err)
 	}
 
-	completion, err := llm.GenerateContent(
-		ctx,
-		content,
-		llms.WithStreamingFunc(func(ctx context.Context, chunk []byte) error {
-			fmt.Print(string(chunk))
-			return nil
-		}),
-		llms.WithSeed(1),
-		llms.WithFrequencyPenalty(0.6),
-		llms.WithTemperature(0.4),
+	return completion.Choices[0].Message.Content, nil
+}
+
+func RolesAssistant(text string) (string, error) {
+	role := "Você é um assistente de carreiras. Analise uma vaga de emprego e destaque os pontos mais importantes do ponto de vista do empregador."
+	return CallLLM(text, role)
+}
+
+func CVAssistant(text string) (string, error) {
+	role := "Você é um assistente de carreiras. Analise um currículo e faça um resumo da experiência e qualificações do candidato."
+	return CallLLM(text, role)
+}
+
+func CareerCoach(roleAnalysis string, cvAnalysis string) (string, error) {
+	role := "Você é um Coach de Carreiras. Você receberá a análise de uma vaga e um currículo e irá gerar um relatório."
+
+	prompt := fmt.Sprintf(
+		"Análise da Vaga:\n%s\n\nAnálise do Currículo:\n%s\n\nCom base nisso, gere um relatório contendo: \n- Comparação entre os requisitos da vaga e o currículo.\n- Recomendações para o candidato.\n- Conclusão geral.",
+		roleAnalysis, cvAnalysis,
 	)
 
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_ = completion
-
+	return CallLLM(prompt, role)
 }
